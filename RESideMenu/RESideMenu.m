@@ -69,8 +69,14 @@
     _menuViewContainer = [[UIView alloc] init];
     _contentViewContainer = [[UIView alloc] init];
     
-    _animationDuration = 0.35f;
     _interactivePopGestureRecognizerEnabled = YES;
+    
+    _springAnimationsEnabled = NO;
+    _animationDuration = 0.35f;
+    _animationDelay = 0.0f;
+    _animationSpringDamping = 1.0f;
+    _animationSpringVelocity = 1.0f;
+    _animationOptions = UIViewAnimationCurveEaseInOut;
   
     _menuViewControllerTransformation = CGAffineTransformMakeScale(1.5f, 1.5f);
     
@@ -265,20 +271,32 @@
     [self __updateContentViewShadow];
     [self __resetContentViewScale];
     
-    [UIView animateWithDuration:self.animationDuration animations:^{
+    __typeof (self) __weak weakSelf = self;
+    void (^animationBlock)(void) = ^{
+        __typeof (weakSelf) __strong strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        
         if (self.scaleContentView) {
             self.contentViewContainer.transform = CGAffineTransformMakeScale(self.contentViewScaleValue, self.contentViewScaleValue);
         } else {
             self.contentViewContainer.transform = CGAffineTransformIdentity;
         }
         self.contentViewContainer.center = CGPointMake((UIInterfaceOrientationIsLandscape([[UIApplication sharedApplication] statusBarOrientation]) ? self.contentViewInLandscapeOffsetCenterX + CGRectGetHeight(self.view.frame) : self.contentViewInPortraitOffsetCenterX + CGRectGetWidth(self.view.frame)), self.contentViewContainer.center.y);
-
-        self.menuViewContainer.alpha = !self.fadeMenuView ?: 1.0f;
+        
+        self.menuViewContainer.alpha = 1.0f;
         self.menuViewContainer.transform = CGAffineTransformIdentity;
         if (self.scaleBackgroundImageView)
             self.backgroundImageView.transform = CGAffineTransformIdentity;
-            
-    } completion:^(BOOL finished) {
+        
+    };
+    
+    void (^completionBlock)(void) = ^{
+        __typeof (weakSelf) __strong strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
         [self __addContentViewControllerMotionEffects];
         
         if (!self.visible && [self.delegate conformsToProtocol:@protocol(RESideMenuDelegate)] && [self.delegate respondsToSelector:@selector(sideMenu:didShowMenuViewController:)]) {
@@ -287,7 +305,23 @@
         
         self.visible = YES;
         self.leftMenuVisible = YES;
-    }];
+    };
+    
+    if (self.springAnimationsEnabled) {
+        
+        [UIView animateWithDuration:self.animationDuration delay:self.animationDelay usingSpringWithDamping:self.animationSpringDamping initialSpringVelocity:self.animationSpringVelocity options:self.animationOptions animations:^{
+            animationBlock();
+        } completion:^(BOOL finished) {
+            completionBlock();
+        }];
+        
+    } else {
+        [UIView animateWithDuration:self.animationDuration animations:^{
+            animationBlock();
+        } completion:^(BOOL finished) {
+            completionBlock();
+        }];
+    }
     
     [self __statusBarNeedsAppearanceUpdate];
 }
@@ -386,12 +420,23 @@
     
     if (animated) {
         [[UIApplication sharedApplication] beginIgnoringInteractionEvents];
-        [UIView animateWithDuration:self.animationDuration animations:^{
-            animationBlock();
-        } completion:^(BOOL finished) {
-            [[UIApplication sharedApplication] endIgnoringInteractionEvents];
-            completionBlock();
-        }];
+        if (self.springAnimationsEnabled) {
+            [UIView animateWithDuration:self.animationDuration delay:self.animationDelay usingSpringWithDamping:self.animationSpringDamping initialSpringVelocity:self.animationSpringVelocity options:self.animationOptions animations:^{
+                animationBlock();
+            } completion:^(BOOL finished) {
+                [[UIApplication sharedApplication] endIgnoringInteractionEvents];
+                completionBlock();
+            }];
+            
+        } else {
+            [UIView animateWithDuration:self.animationDuration animations:^{
+                animationBlock();
+            } completion:^(BOOL finished) {
+                [[UIApplication sharedApplication] endIgnoringInteractionEvents];
+                completionBlock();
+            }];
+        }
+
     } else {
         animationBlock();
         completionBlock();
